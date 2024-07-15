@@ -2,9 +2,8 @@ import 'dart:async';
 import 'dart:developer';
 import 'dart:io';
 
-import 'package:camera/camera.dart';
 import 'package:flutter/material.dart';
-import 'package:google_mlkit_barcode_scanning/google_mlkit_barcode_scanning.dart';
+import 'package:in_app_scanner/in_app_scanner.dart';
 
 class InAppScannerController extends ChangeNotifier {
   final List<BarcodeFormat> formats;
@@ -16,6 +15,8 @@ class InAppScannerController extends ChangeNotifier {
   BarcodeScanner? _scanner;
 
   BarcodeScanner? get scanner => _scanner;
+
+  InAppScannerFlags _flag = InAppScannerFlags.camera;
 
   String? _barcode;
 
@@ -43,7 +44,8 @@ class InAppScannerController extends ChangeNotifier {
 
   InAppScannerController({
     this.formats = const [BarcodeFormat.all],
-  });
+    InAppScannerFlags flag = InAppScannerFlags.camera,
+  }) : _flag = flag;
 
   Future<void> init() async {
     _scanner?.close();
@@ -59,32 +61,54 @@ class InAppScannerController extends ChangeNotifier {
     await _controller?.initialize();
     _isCameraInitialized = true;
     notifyListeners();
-    scan();
+    _flagging();
   }
 
-  Future<void> scan() async {
+  void setFlag(InAppScannerFlags flag) {
+    _flag = flag;
+    _flagging();
+    notifyListeners();
+  }
+
+  Future<void> _flagging() async {
+    switch (_flag) {
+      case InAppScannerFlags.barcode:
+        return _scanBarcode();
+      case InAppScannerFlags.camera:
+        return;
+    }
+  }
+
+  Future<void> _scanBarcode() async {
     if (_isProcessing || isScanned) return;
     _isProcessing = true;
     notifyListeners();
+    _barcode = await scanBarcode();
+    _isProcessing = false;
+    notifyListeners();
+    _scanBarcode();
+  }
+
+  Future<String?> scanBarcode() async {
     final picture = await _controller!.takePicture();
     final inputImage = InputImage.fromFilePath(picture.path);
     final barcodes = await _scanner?.processImage(inputImage);
     if (barcodes != null && barcodes.isNotEmpty) {
       final result = barcodes.first.rawValue;
       if (result != null && result.isNotEmpty) {
-        log("SCANNED: $result");
-        _barcode = result;
-        notifyListeners();
+        return result;
       }
     }
-    _isProcessing = false;
-    notifyListeners();
-    scan();
+    return null;
   }
 
-  Future<void> rescan() {
-    _barcode = null;
-    return scan();
+  Future<void> rescanBarcode() async {
+    if (_flag == InAppScannerFlags.barcode) {
+      _barcode = null;
+      return _scanBarcode();
+    } else {
+      log("InAppScanner error: $_flag didn't match ${InAppScannerFlags.barcode}");
+    }
   }
 
   Future<File?> takePicture() async {
@@ -120,3 +144,5 @@ class InAppScannerController extends ChangeNotifier {
     _scanner?.close();
   }
 }
+
+enum InAppScannerFlags { camera, barcode }
