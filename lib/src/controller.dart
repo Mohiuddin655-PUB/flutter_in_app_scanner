@@ -89,9 +89,9 @@ class InAppScannerController extends ChangeNotifier {
     _scanBarcode();
   }
 
-  Future<String?> scanBarcode() async {
-    final picture = await _controller!.takePicture();
-    final inputImage = InputImage.fromFilePath(picture.path);
+  Future<String?> scanBarcode([String? path]) async {
+    path ??= (await _controller!.takePicture()).path;
+    final inputImage = InputImage.fromFilePath(path);
     final barcodes = await _scanner?.processImage(inputImage);
     if (barcodes != null && barcodes.isNotEmpty) {
       final result = barcodes.first.rawValue;
